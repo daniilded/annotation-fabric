@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>annotation</title>
+</head>
+<body>
+<style type="text/css">
+html, body { margin: 0; }
+canvas { width: 100%; height: 100%; }
+
+html, body {
+	width: 100%;
+	height: 100%;
+}
+#canvas {
+	position: absolute;
+	top: 0;
+	right: 0;
+	left: 0;
+	width: 100% !important;
+	height: 100% !important;
+}
+.canvas-container {
+	position: relative;
+	margin: auto;
+	width: 100%!important;
+	height: 100%!important;
+	background-image: url(data:image/gif;base64,R0lGODlhCgAKAIAAAOLi4v///yH5BAAHAP8ALAAAAAAKAAoAAAIRhB2ZhxoM3GMSykqd1VltzxQAOw==);
+}
+.upper-canvas {
+	width: 100% !important;
+	height: 100% !important;
+}
+#tool_container {
+	position: fixed;
+	bottom: 0;
+	margin-left: 50px;
+	height: 50px;
+}
+#tool_container >div { 
+	float: left;
+	padding: 10px;
+}
+#canvas_container {
+	margin: auto;
+}
+
+</style>
+<script type="text/javascript" src="fabric.min.js"></script>
+<script type="text/javascript" src="jquery.min.js"></script>
+<div id="canvas_container">
+	<canvas id="canvas"></canvas>
+</div>
+<div id="tool_container">
+	<div><button class="color" color='#34A3DB' style="background-color:#34A3DB">&nbsp</button></div>
+	<div><button class="color" color='#E67523' style="background-color:#E67523">&nbsp</button></div>
+	<div><button class="color" color='#E74A3C' style="background-color:#E74A3C">&nbsp</button></div>
+	<div><button class="color" color='#1BBCA1' style="background-color:#1BBCA1">&nbsp</button></div>
+	<div><button class="method" method='line'>Line</button></div>
+	<div><button class="method" method='rectangle'>Rectangle</button></div>
+	<div><button class="method" method='arrow'>Arrow</button></div>
+	<div><button id = "pen">Pen</button></div>
+	<div><button id="undo">Undo</button></div>
+	<div><button id="redo">Redo</button></div>
+	<div><button id="clear">Clear</button></div>
+	<div><button id="exportjson">Export JSON</button></div>
+	<div><button id="exportpng">Export PNG</button></div>
+	<div><input type="radio" name="ratio" value="1" checked>16:9</div>
+	<div><input type="radio" name="ratio" value="2">9:16</div>
+	<div><input type="radio" name="ratio" value="3">1:1</div>
+</div>
+
+<script type="text/javascript">
+
+var origin_canvas = document.getElementById('canvas');
+origin_canvas.width = window.innerWidth;
+origin_canvas.height = window.innerHeight;
+var canvas_container = document.getElementById('canvas_container');
+console.log(canvas_container)
+canvas_container.style.width = window.innerWidth + 'px';
+canvas_container.style.height = window.innerHeight + 'px';
+if (window.innerWidth/16 > window.innerHeight/9) {
+	origin_canvas.width = window.innerHeight/9*16;
+	canvas_container.style.width = window.innerHeight/9*16 + 'px';
+} else {
+	origin_canvas.height = window.innerWidth/16*9;
+	canvas_container.style.height = window.innerWidth/16*9 + 'px';
+}
+
+var canvas = new fabric.Canvas('canvas', { selection: false });
+
+var rectangle, line, arrow, polyline, isDown, origX, origY, method, color;
+
+method = 'line';
+color = '#34A3DB';
+
+canvas.on('mouse:down', function(o){
+    var pointer = canvas.getPointer(o.e);
+    isDown = true;
+    origX = pointer.x;
+    origY = pointer.y;
+
+    if (method == 'rectangle') {
+	    rectangle = new fabric.Rect({
+	        left: origX,
+	        top: origY,
+	        fill: '',
+	        stroke: color,
+	        strokeWidth: 2,
+	        rx: 5,
+	  		ry: 5
+	    });
+	    canvas.add(rectangle);
+	} else if (method == 'line') {
+		line = new fabric.Line([origX, origY, origX, origY], {
+			strokeWidth: 3,
+			fill: color,
+			stroke: color,
+			originX: 'center',
+			originY: 'center'
+		});
+		canvas.add(line);
+	} else if (method == 'arrow') {
+		arrow = new fabric.Path('M 0 0 100 10 180 15 180 20 200 10 180 0 180 5 100 10', {
+			left: origX,
+			top: origY,
+			hoverCursor: 'line',
+			fill: color,
+			originX: 'center',
+			originY: 'center',
+			scaleX: 0,
+			scaleY: 0
+		});
+		canvas.add(arrow);
+	} else if (method == 'pen') {
+		// polyline = new fabric.Polyline([pointer], {
+		// 	top: origY, 
+		// 	left: origX,
+		// 	fill: 'transparent', 
+		// 	stroke: color
+		// });
+		// canvas.add(polyline)
+		// console.log(polyline)
+	}
+
+});
+
+canvas.on('mouse:move', function(o){
+    if (!isDown) return;
+
+	var pointer = canvas.getPointer(o.e);
+    if (method == 'rectangle') { // rectangle
+	    if(origX>pointer.x){
+	        rectangle.set({ left: Math.abs(pointer.x) });
+	    }
+	    if(origY>pointer.y){
+	        rectangle.set({ top: Math.abs(pointer.y) });
+	    }
+	    rectangle.set({ width: Math.abs(origX - pointer.x) });
+	    rectangle.set({ height: Math.abs(origY - pointer.y) });
+	} else if (method == 'line') { // line
+		line.set({ x2: pointer.x, y2: pointer.y });
+	} else if (method == 'arrow') {
+		var deg = angle(origX, origY, pointer.x, pointer.y);
+		var distance = Math.sqrt((origX-pointer.x)*(origX-pointer.x)+(origY-pointer.y)*(origY-pointer.y));
+		arrow.set({
+			scaleX: distance / 100,
+			scaleY: distance / 100
+		});
+		arrow.rotate(deg)
+	} else if (method == 'pen') {
+		// polyline.points.push(pointer);
+		// console.log(polyline)
+	}
+
+    canvas.renderAll();
+});
+
+canvas.on('mouse:up', function(o) {
+    canvas._objects[canvas._objects.length - 1].selectable = false;
+    canvas._objects[canvas._objects.length - 1].hoverCursor = 'line';
+    isDown = false;
+});
+
+function angle(cx, cy, ex, ey) {
+	var dy = ey - cy;
+	var dx = ex - cx;
+	var theta = Math.atan2(dy, dx); // range (-PI, PI]
+	theta *= 180 / Math.PI; // rads to degs, range (-180, 180]
+	if (theta < 0) theta = 360 + theta; // range [0, 360)
+	return theta;
+}
+
+canvas.freeDrawingBrush.width = 3;
+canvas.freeDrawingBrush.color = color;
+canvas.freeDrawingBrush.selectable = false;
+
+canvas.on('object:added',function(){
+	if(!isRedoing){
+		h = [];
+	}
+	isRedoing = false;
+});
+
+var isRedoing = false;
+var h = [];
+function undo() {
+	if(canvas._objects.length>0){
+		h.push(canvas._objects.pop());
+		canvas.renderAll();
+	}
+}
+function redo() {
+	if(h.length>0){
+		isRedoing = true;
+		canvas.add(h.pop());
+	}
+}
+function export_json() {
+	console.log(canvas.toJSON());
+}
+function export_png() {
+	downloadFabric(canvas, 'download')
+}
+
+// Save
+function download(url, name) {
+  // make the link. set the href and download. emulate dom click
+  $('<a>').attr({
+    href: url,
+    download: name
+  })[0].click();
+}
+
+function downloadFabric(canvas, name) {
+  //  convert the canvas to a data url and download it.
+  download(canvas.toDataURL({
+    multiplier: 4
+  }), name + '.png');
+}
+
+// Print
+function printCanvas() {
+  var dataUrl = canvas.toDataURL( /* data multiplier?*/ ); //attempt to save base64 string to server using this var  
+  var windowContent = '<!DOCTYPE html>';
+  windowContent += '<html>'
+  windowContent += '<head><title>Print canvas</title></head>';
+  windowContent += '<body>'
+  windowContent += '<img src="' + dataUrl + '" onload=window.print();window.close();>';
+  windowContent += '</body>';
+  windowContent += '</html>';
+  var printWin = window.open('', '', 'width=340,height=260');
+  printWin.document.open();
+  printWin.document.write(windowContent);
+}
+
+$(document).ready(function() {
+	$('.color').click(function() {
+		color = $(this).attr('color');
+		canvas.freeDrawingBrush.color = color;
+	})
+	$('.method').click(function() {
+		method = $(this).attr('method');
+		canvas.isDrawingMode = false;
+	})
+	$('#clear').click(function() {
+		canvas.clear();
+	})
+	$('#pen').click(function() {
+		method = 'pen';
+		canvas.isDrawingMode = true;
+	})
+	$('#undo').click(function() {
+		undo();
+	})
+	$('#redo').click(function() {
+		redo();
+	})
+	$('#exportpng').click(function() {
+		export_png();
+	})
+	$('#exportjson').click(function() {
+		export_json();
+	})
+	$('input').change(function() {
+		var width = window.innerWidth;
+		var height = window.innerHeight;
+
+		if ($(this).val() == 1) {	// 16:9
+			if (width/16 > height/9) {
+				width = height/9*16;
+			} else {
+				height = width/16*9;
+			}
+		} else if ($(this).val() == 2) {	// 9:16
+			if (width/9 > height/16) {
+				width = height/16*9;
+			} else {
+				height = width/9*16;
+			}
+		} else if ($(this).val() == 3) {	// 1:1
+			if (width > height) {
+				width = height;
+			} else {
+				height = width;
+			}
+		}
+		canvas.setDimensions({width:width, height:height});
+		canvas_container.style.width = width + 'px';
+		canvas_container.style.height = height + 'px';
+		canvas.freeDrawingBrush.width = 3;
+	})
+	$( window ).resize(function() {
+		var width = $(this).width();
+		var height = $(this).height();
+
+		if ($('input:checked').val() == 1) {	// 16:9
+			if (width/16 > height/9) {
+				width = height/9*16;
+			} else {
+				height = width/16*9;
+			}
+		} else if ($('input:checked').val() == 2) {	// 9:16
+			if (width/9 > height/16) {
+				width = height/16*9;
+			} else {
+				height = width/9*16;
+			}
+		} else if ($('input:checked').val() == 3) {	// 1:1
+			if (width > height) {
+				width = height;
+			} else {
+				height = width;
+			}
+		}
+		// canvas.setDimensions({width:width, height:height});
+		canvas_container.style.width = width + 'px';
+		canvas_container.style.height = height + 'px';
+	});
+
+})
+
+</script>
+</body>
+</html>
